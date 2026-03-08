@@ -1,13 +1,22 @@
+# NEXT
+
+- Remove unused dependencies
+- Improve build output
+
 # 0.0.5
+
 - Support for '%' overloads
 
 # 0.0.4
-- Support for '**' overloads
+
+- Support for '\*\*' overloads
 
 # 0.0.3
+
 - Not exporting the helper functions, limiting the public API surface.
 
 # 0.0.2
+
 - Populating the global scope with helper functions, so that code transformers (like `tsover/plugin`, `unplugin-typegpu`) have access to them without requiring a direct runtime dependency (a transitive dependency is fine).
 
 # 0.0.1

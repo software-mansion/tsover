@@ -2,17 +2,17 @@
   "name": "tsover-runtime",
   "version": "0.0.5",
   "description": "Minimal runtime library for overloading operators in tsover",
+  "keywords": [
+    "operator-overloading",
+    "typescript"
+  ],
+  "homepage": "https://software-mansion-labs.github.io/tsover",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/software-mansion-labs/tsover.git",
     "directory": "packages/tsover-runtime"
   },
-  "homepage": "https://software-mansion-labs.github.io/tsover",
-  "keywords": [
-    "operator-overloading",
-    "typescript"
-  ],
-  "license": "Apache-2.0",
   "files": [
     "dist",
     "README.md",
@@ -36,14 +36,10 @@
     "build": "tsdown",
     "prepublishOnly": "pnpm run build"
   },
-  "dependencies": {
-    "minimatch": "^9.0.0",
-    "unplugin": "^2.0.0"
-  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tinybench": "^6.0.0",
-    "tsdown": "^0.20.3",
+    "tsdown": "^0.21.0",
     "tsover-runtime": "workspace:*",
     "typescript": "^5.0.0"
   }
