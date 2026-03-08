@@ -1,4 +1,4 @@
-# NEXT
+# 0.0.6
 
 - Remove unused dependencies
 - Improve build output
