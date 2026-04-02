@@ -484,7 +484,7 @@ try {
       await readFile(libsJsonPath, 'utf-8'),
     ) as jsonc.CommentObject;
 
-    (libsJsonContent?.libs as jsonc.CommentArray<string>).push('tsover');
+    (libsJsonContent!.libs as jsonc.CommentArray<string>)!.push('tsover');
     await writeFile(libsJsonPath, jsonc.stringify(libsJsonContent, undefined, 4));
     console.log('  ✓ Patched libs.json');
   } catch (error) {
@@ -507,7 +507,7 @@ try {
     const diagnosticCodes = (Object.values(diagnosticsJsonContent) as jsonc.CommentObject[])
       .filter((d) => d.category === 'Message')
       .map((d) => d.code as number)
-      .sort((a, b) => a - b);
+      .toSorted((a, b) => a - b);
     // Choosing the last diagnostic code and incrementing it by 1
     const code = diagnosticCodes[diagnosticCodes.length - 1] + 1;
     jsonc.assign(diagnosticsJsonContent, {

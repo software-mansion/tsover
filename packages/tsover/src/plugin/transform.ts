@@ -24,7 +24,7 @@ export function transformSourceFile(options: TransformOptions): TransformResult 
 
   // Create a transformer that visits all binary expressions
   const transformer: ts.TransformerFactory<ts.SourceFile> = (context) => {
-    return (sourceFile) => {
+    return (file) => {
       function visit(node: ts.Node): ts.Node {
         // Check if this is a binary expression
         if (ts.isBinaryExpression(node)) {
@@ -52,7 +52,7 @@ export function transformSourceFile(options: TransformOptions): TransformResult 
         return ts.visitEachChild(node, visit, context);
       }
 
-      return ts.visitNode(sourceFile, visit) as ts.SourceFile;
+      return ts.visitNode(file, visit) as ts.SourceFile;
     };
   };
 

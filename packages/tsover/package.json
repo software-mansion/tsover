@@ -2,14 +2,7 @@
   "name": "tsover",
   "version": "0.0.0",
   "description": "Fork of TypeScript with operator overloading",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/software-mansion-labs/tsover.git",
-    "directory": "packages/tsover"
-  },
-  "homepage": "https://software-mansion-labs.github.io/tsover",
   "keywords": [
-    "typescript",
     "esbuild-plugin",
     "operator-overloading",
     "rollup-plugin",
@@ -18,7 +11,13 @@
     "vite-plugin",
     "webpack-plugin"
   ],
+  "homepage": "https://software-mansion-labs.github.io/tsover",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/software-mansion-labs/tsover.git",
+    "directory": "packages/tsover"
+  },
   "bin": {
     "tsc": "./bin/tsc",
     "tsserver": "./bin/tsserver"

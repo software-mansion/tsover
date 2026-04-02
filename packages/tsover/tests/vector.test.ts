@@ -15,7 +15,10 @@ class Vec2f {
   }
 
   [Operator.star](lhs: Vec2f | number, rhs: Vec2f | number): Vec2f;
-  [Operator.star](lhs: Vec2f | number, rhs: Vec2f | number): Vec2f | typeof Operator.deferOperation {
+  [Operator.star](
+    lhs: Vec2f | number,
+    rhs: Vec2f | number,
+  ): Vec2f | typeof Operator.deferOperation {
     if (typeof lhs === 'number' && rhs instanceof Vec2f) {
       return new Vec2f(lhs * rhs.x, lhs * rhs.y);
     } else if (typeof rhs === 'number' && lhs instanceof Vec2f) {
@@ -41,9 +44,11 @@ class Vec2f {
     return Operator.deferOperation;
   }
 
-
   [Operator.percent](lhs: Vec2f | number, rhs: Vec2f | number): Vec2f;
-  [Operator.percent](lhs: Vec2f | number, rhs: Vec2f | number): Vec2f | typeof Operator.deferOperation {
+  [Operator.percent](
+    lhs: Vec2f | number,
+    rhs: Vec2f | number,
+  ): Vec2f | typeof Operator.deferOperation {
     if (typeof lhs === 'number' && rhs instanceof Vec2f) {
       return new Vec2f(lhs % rhs.x, lhs % rhs.y);
     } else if (typeof rhs === 'number' && lhs instanceof Vec2f) {
@@ -75,7 +80,10 @@ class Vec3f {
   }
 
   [Operator.star](lhs: Vec3f | number, rhs: Vec3f | number): Vec3f;
-  [Operator.star](lhs: Vec3f | number, rhs: Vec3f | number): Vec3f | typeof Operator.deferOperation {
+  [Operator.star](
+    lhs: Vec3f | number,
+    rhs: Vec3f | number,
+  ): Vec3f | typeof Operator.deferOperation {
     if (typeof lhs === 'number' && rhs instanceof Vec3f) {
       return new Vec3f(lhs * rhs.x, lhs * rhs.y, lhs * rhs.z);
     } else if (typeof rhs === 'number' && lhs instanceof Vec3f) {
@@ -94,7 +102,7 @@ class Vec3f {
 test('outside of directive scope', () => {
   // @ts-expect-error
   expect(new Vec2f(1, 2) + new Vec2f(3, 4)).toMatchInlineSnapshot(`"(1, 2)(3, 4)"`);
-})
+});
 
 test('A + B', () => {
   'use tsover';

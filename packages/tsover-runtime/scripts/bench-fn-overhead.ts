@@ -25,9 +25,9 @@ export class Vec2f {
 
 const bench = new Bench({ name: 'simple benchmark', time: 100 });
 
-const s = (a: unknown) => typeof a === 'number' || typeof a === 'string';
+// const s = (a: unknown) => typeof a === 'number' || typeof a === 'string';
 // prettier-ignore
-const A0 = (a:unknown,b:unknown)=>((typeof a==="number"||typeof a==="string")&&(typeof b==="number"||typeof b==="string")?a+b:add(a,b));
+const A0 = (a: unknown, b: unknown) => ((typeof a === "number" || typeof a === "string") && (typeof b === "number" || typeof b === "string") ? a + b : add(a, b));
 // prettier-ignore
 // const [A0, A1] = [
 //   (a,b)=>((typeof a === "number" || typeof a === "string")&&(typeof b === "number" || typeof b === "string")?a+b:add(a,b)),

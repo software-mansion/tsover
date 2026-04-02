@@ -5,9 +5,6 @@
 import ts from 'tsover';
 import * as path from 'path';
 
-const cachedProgram: ts.Program | null = null;
-const cachedConfigPath: string | null = null;
-
 export interface ProgramManagerOptions {
   tsconfigPath?: string;
 }
