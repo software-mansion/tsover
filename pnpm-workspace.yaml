@@ -1,4 +1,6 @@
+nodeLinker: hoisted
+
 packages:
-  - "packages/*"
-  - "examples/*"
-  - "apps/*"
+  - 'packages/*'
+  - 'examples/*'
+  - 'apps/*'
