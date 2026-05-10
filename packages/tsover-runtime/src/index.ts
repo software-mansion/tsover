@@ -30,13 +30,15 @@ declare global {
 
 /**
  * `true` if the user uses the `tsover` Language Server, `false` if the user is using the
- * standard TypeScript Language Server.
+ * standard TypeScript Language Server or has opted out via `tsover-runtime/disable`.
  */
 export type TsoverEnabled = typeof globalThis extends {
-  __tsover__enabled: true;
+  __tsover__disabled: true;
 }
-  ? true
-  : false;
+  ? false
+  : typeof globalThis extends { __tsover__enabled: true }
+    ? true
+    : false;
 
 function polyfillSymbol(name: string): void {
   // Polyfill the symbol if it doesn't exist

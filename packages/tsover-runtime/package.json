@@ -26,6 +26,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./disable": {
+      "types": "./dist/disable.d.ts"
+    },
     "./package.json": {
       "import": "./package.json"
     }

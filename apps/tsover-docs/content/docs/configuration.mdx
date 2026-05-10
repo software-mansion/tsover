@@ -1,0 +1,18 @@
+---
+title: Configuration
+description: All the ways tsover can be configured
+---
+
+## Disabling tsover
+
+If you need to opt out program-wide (for example, to compare behavior against vanilla TypeScript), add `tsover-runtime/disable` to the `types` array:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "types": ["tsover-runtime/disable" /*...*/]
+  }
+}
+```
+
+This assumes you have `tsover-runtime` installed, so if you don't, install it.

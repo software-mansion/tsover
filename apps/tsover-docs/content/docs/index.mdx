@@ -8,7 +8,6 @@ After completing this guide, overloaded operators will be available within `'use
 ```ts twoslash tab="main.ts"
 // @noEmit: true
 // @allowImportingTsExtensions: true
-// @lib: tsover
 // @filename: vec2f.ts
 import { Operator } from 'tsover-runtime';
 
@@ -64,6 +63,12 @@ export class Vec2f {
 }
 ```
 
+<Callout type="info">
+
+If you're using TypeGPU, operator overloads will also work within `'use gpu'` marked scopes.
+
+</Callout>
+
 ## Installation
 
 The `tsover` package is a drop-in replacement for TypeScript, and to install it, first change what `typescript` points to in your `package.json` file.
@@ -79,7 +84,8 @@ The `tsover` package is a drop-in replacement for TypeScript, and to install it,
 
 <Callout>
 Instead of `@latest`, consider pinning a version where `major.minor` matches between `tsover` and `typescript`, for example:
-- typescript@**5.9**.3 => tsover@**5.9**.x
+- typescript@**5.9**.x => tsover@**5.9**.x
+- typescript@**6.0**.x => tsover@**6.0**.x
 </Callout>
 
 There could be other packages that depend on `typescript`, so it is best to override them as well.
@@ -118,21 +124,16 @@ There could be other packages that depend on `typescript`, so it is best to over
 }
 ```
 
-<Callout>
-  In a monorepo setup, overrides/resolutions should be defined in the root `package.json` file.
-</Callout>
+### Monorepo
 
-## tsconfig.json
+In a monorepo, you might have `typescript` installed as a dev dependency of specific packages, but not the workspace, causing the IDE to use a built-in TypeScript server instead of `tsover`.
 
-All additional `tsover` functionality is enabled only when `"tsover"` is included as a lib in your `tsconfig.json` file.
-
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "lib": ["tsover" /*...*/]
-  }
-}
+```npm
+# might need to pass -w to install a workspace dependency
+npm i -D typescript@npm:tsover@latest
 ```
+
+The same goes for overrides/resolutions, they need to be defined in the root `package.json` file.
 
 ## Editor setup
 
@@ -191,7 +192,7 @@ If instead you're using `typescript-language-server`, change your settings file 
 
 ## Code Transform
 
-<Callout type="idea">
+<Callout type="warn">
 
 If you're using TypeGPU, its bundler plugin `unplugin-typegpu` already handles operator overloads that are placed inside 'use gpu' marked functions.
 

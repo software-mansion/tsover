@@ -267,6 +267,16 @@ try {
         return links.useGpuScope = __tsover__computeIsInDirectiveScope(node, 'use gpu');
     }
 
+    let __tsover__explicitlyDisabledCache: boolean | undefined;
+    function __tsover__isExplicitlyDisabled(): boolean {
+        if (__tsover__explicitlyDisabledCache !== undefined) {
+            return __tsover__explicitlyDisabledCache;
+        }
+
+        const isDisabled = !!globalThisSymbol.exports?.has(escapeLeadingUnderscores("__tsover__disabled"));
+        return __tsover__explicitlyDisabledCache = isDisabled;
+    }
+
     function __tsover__computeIsInDirectiveScope(node: Node, directive: string): boolean {
         // Check source file level first
         const sourceFile = getSourceFileOfNode(node);
@@ -287,19 +297,7 @@ try {
         return false;
     }
 
-    function __tsover__couldHaveOverloadedOperators(
-      left: Expression,
-      operator: BinaryOperator,
-      right: Expression,
-      _leftType: Type,
-      _rightType: Type,
-    ): boolean {
-        const baseOp = __tsover__compoundOperators[operator] ?? operator;
-        const knownSymbolName = __tsover__overloaded[baseOp as keyof typeof __tsover__overloaded];
-        if (!(__tsover__isInUseTsoverScope(left) || __tsover__isInUseGpuScope(left)) || !knownSymbolName) {
-            return false;
-        }
-
+    function __tsover__hasOverloadProperty(_leftType: Type, _rightType: Type, knownSymbolName: string): boolean {
         const leftType = getBaseConstraintOrType(_leftType);
         const rightType = getBaseConstraintOrType(_rightType);
 
@@ -319,6 +317,31 @@ try {
         return typesToCheck.some((aType) => !!getTypeOfPropertyOfType(aType, propertyName));
     }
 
+    function __tsover__isInOverloadingScope(node: Node): boolean {
+        return __tsover__isInUseTsoverScope(node) || __tsover__isInUseGpuScope(node);
+    }
+
+    function __tsover__couldHaveOverloadedOperators(
+      left: Expression,
+      operator: BinaryOperator,
+      right: Expression,
+      _leftType: Type,
+      _rightType: Type,
+    ): boolean {
+        const baseOp = __tsover__compoundOperators[operator] ?? operator;
+        const knownSymbolName = __tsover__overloaded[baseOp as keyof typeof __tsover__overloaded];
+        if (!knownSymbolName) {
+            return false;
+        }
+        if (__tsover__isExplicitlyDisabled()) {
+            return false;
+        }
+        if (!__tsover__isInOverloadingScope(left)) {
+            return false;
+        }
+        return __tsover__hasOverloadProperty(_leftType, _rightType, knownSymbolName);
+    }
+
     function __tsover__getOverloadReturnType(
       left: Expression,
       operator: BinaryOperator,
@@ -329,7 +352,7 @@ try {
     ): Type | undefined {
         const baseOp = __tsover__compoundOperators[operator] ?? operator;
         const knownSymbolName = __tsover__overloaded[baseOp as keyof typeof __tsover__overloaded];
-        if (!(__tsover__isInUseTsoverScope(left) || __tsover__isInUseGpuScope(left)) || !knownSymbolName) {
+        if (!knownSymbolName || __tsover__isExplicitlyDisabled() || !__tsover__isInOverloadingScope(left)) {
             return undefined;
         }
 
@@ -438,18 +461,22 @@ try {
           }
           return overloadedType;
       }
+      {
+          // Operator overloading is gated off but the operands carry an overload — surface a warning
+          // pointing at the disabling condition so the user can opt in.
+          const __tsover__baseOp = __tsover__compoundOperators[operator] ?? operator;
+          const __tsover__knownSymbolName = __tsover__overloaded[__tsover__baseOp as keyof typeof __tsover__overloaded];
+          if (__tsover__knownSymbolName && __tsover__hasOverloadProperty(leftType, rightType, __tsover__knownSymbolName)) {
+              if (__tsover__isExplicitlyDisabled()) {
+                  errorOrSuggestion(/*isError*/ true, operatorToken, Diagnostics.Operator_overloading_for_0_is_disabled_because_tsover_runtime_Slashdisable_has_been_imported_in_the_program, tokenToString(operator));
+              }
+              else if (!__tsover__isInOverloadingScope(left)) {
+                  errorOrSuggestion(/*isError*/ true, operatorToken, Diagnostics.Operator_overloading_for_0_is_disabled_outside_of_a_use_tsover_or_use_gpu_scope, tokenToString(operator));
+              }
+          }
+      }
       `,
     );
-    // The code below can be re-added if underlining is considered useful
-    // if (overloadedType) {
-    //   errorOrSuggestion(
-    //     /*isError*/ false,
-    //     operatorToken,
-    //     Diagnostics.Operator_0_is_overloaded,
-    //     tokenToString(operator),
-    //   );
-    //   return overloadedType;
-    // }
 
     await writeFile(checkerPath, checkerContent);
 
@@ -505,15 +532,18 @@ try {
     ) as jsonc.CommentObject;
 
     const diagnosticCodes = (Object.values(diagnosticsJsonContent) as jsonc.CommentObject[])
-      .filter((d) => d.category === 'Message')
       .map((d) => d.code as number)
       .toSorted((a, b) => a - b);
     // Choosing the last diagnostic code and incrementing it by 1
-    const code = diagnosticCodes[diagnosticCodes.length - 1] + 1;
+    const baseCode = diagnosticCodes[diagnosticCodes.length - 1] + 1;
     jsonc.assign(diagnosticsJsonContent, {
-      "Operator '{0}' is overloaded.": {
-        category: 'Message',
-        code,
+      "Operator overloading for '{0}' is disabled outside of a 'use tsover' or 'use gpu' scope.": {
+        category: 'Warning',
+        code: baseCode,
+      },
+      "Operator overloading for '{0}' is disabled because \"tsover-runtime/disable\" has been imported in the program.": {
+        category: 'Warning',
+        code: baseCode + 1,
       },
     });
     await writeFile(diagnosticsJsonPath, jsonc.stringify(diagnosticsJsonContent, undefined, 4));
@@ -523,30 +553,43 @@ try {
     patchErrors.push(error);
   }
 
-  // Create tsover.d.ts
+  // Patch program.ts - auto-load lib.tsover.d.ts so the fork is enabled by default.
+  const programPath = resolve(typescriptTargetDir, 'src', 'compiler', 'program.ts');
+  let programContent = await readFile(programPath, 'utf-8');
+
+  try {
+    programContent = SWM_CHANGE_NOTICE + programContent;
+
+    let injected = `
+                // tsover: always include lib.tsover.d.ts so the fork's TsoverEnabled
+                // defaults to true. Disable program-wide via "types": ["tsover-runtime/disable"].`;
+    // Some versions of program.ts require an additional parameter to `processRootFile`
+    if (programContent.includes('/*ignoreNoDefaultLib*/')) {
+      injected += `
+                processRootFile(pathForLibFile("lib.tsover.d.ts"), /*isDefaultLib*/ true, /*ignoreNoDefaultLib*/ false, { kind: FileIncludeKind.LibFile });`;
+    } else {
+      injected += `
+                processRootFile(pathForLibFile("lib.tsover.d.ts"), /*isDefaultLib*/ true, { kind: FileIncludeKind.LibFile });`;
+    }
+
+    programContent = injectAfter(
+      programContent,
+      /forEach\(options\.lib, \(libFileName, index\) => \{[\s\S]*?\}\);\s*\}\s*\);/,
+      injected,
+    );
+
+    await writeFile(programPath, programContent);
+    console.log('  ✓ Patched program.ts');
+  } catch (error) {
+    patchErrors.push('  ✗ Could not find pattern in program.ts');
+    patchErrors.push(error);
+  }
+
+  // Create tsover.d.ts. Only the enabled marker lives here; SymbolConstructor
+  // augmentations and the TsoverEnabled type are owned by tsover-runtime.
   const tsoverDtsPath = resolve(typescriptTargetDir, 'src', 'lib', 'tsover.d.ts');
   const tsoverDtsContent = `${SWM_LICENSE}
 declare var __tsover__enabled: true;
-
-interface SymbolConstructor {
-    readonly deferOperation: unique symbol;
-
-    // binary operations
-    readonly operatorPlus: unique symbol;
-    readonly operatorMinus: unique symbol;
-    readonly operatorStar: unique symbol;
-    readonly operatorSlash: unique symbol;
-    readonly operatorStarStar: unique symbol;
-    readonly operatorPercent: unique symbol;
-    readonly operatorEqEq: unique symbol;
-
-    // unary operations
-    readonly operatorPrePlusPlus: unique symbol;
-    readonly operatorPreMinusMinus: unique symbol;
-    readonly operatorPostPlusPlus: unique symbol;
-    readonly operatorPostMinusMinus: unique symbol;
-    readonly operatorPreMinus: unique symbol;
-}
 `;
   await writeFile(tsoverDtsPath, tsoverDtsContent);
   console.log('  ✓ Created tsover.d.ts');
