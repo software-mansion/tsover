@@ -1,3 +1,7 @@
+# 0.0.7
+
+- Importing or referencing `tsover-runtime/disable` acts as an explicit disable mechanism for new versions of `tsover`
+
 # 0.0.6
 
 - Remove unused dependencies
