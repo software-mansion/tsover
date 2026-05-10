@@ -1,10 +1,10 @@
 # tsover-runtime
 
-Minimal runtime library for overloading operators in [tsover](https://software-mansion-labs.github.io/tsover).
+Minimal runtime library for overloading operators in [tsover](https://tsover.swmansion.com).
 
 ## Documentation
 
-To get started, or to learn more about the project, [visit the official website](https://software-mansion-labs.github.io/tsover).
+To get started, or to learn more about the project, [visit the official website](https://tsover.swmansion.com).
 
 ## tsover is created by Software Mansion
 

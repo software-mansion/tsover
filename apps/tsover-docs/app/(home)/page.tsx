@@ -45,7 +45,7 @@ export default function HomePage() {
               Get Started
             </Button>
             <Button
-              href="https://github.com/software-mansion-labs/tsover"
+              href="https://github.com/software-mansion/tsover"
               variant="secondary"
               external
               icon={<Github className="w-4 h-4" />}

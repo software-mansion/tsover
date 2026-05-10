@@ -6,11 +6,11 @@
     "operator-overloading",
     "typescript"
   ],
-  "homepage": "https://software-mansion-labs.github.io/tsover",
+  "homepage": "https://tsover.swmansion.com",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/software-mansion-labs/tsover.git",
+    "url": "git+https://github.com/software-mansion/tsover.git",
     "directory": "packages/tsover-runtime"
   },
   "files": [
