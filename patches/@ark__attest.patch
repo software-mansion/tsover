@@ -1,0 +1,41 @@
+diff --git a/out/config.js b/out/config.js
+index 1cfc8f398e45fadd9955fb3f4818e39565b1255d..c48553e9907ac653aa9b7f201891e5940ef8bbe5 100644
+--- a/out/config.js
++++ b/out/config.js
+@@ -74,8 +74,11 @@ const addEnvConfig = (config) => {
+     }
+     return config;
+ };
+-const parseConfig = () => {
++const parseConfig = (options) => {
+     const baseConfig = addEnvConfig(getDefaultAttestConfig());
++    if (options) {
++        Object.assign(baseConfig, options);
++    }
+     const cacheDir = resolve(".attest");
+     const assertionCacheDir = join(cacheDir, "assertions");
+     const defaultAssertionCachePath = join(assertionCacheDir, "typescript.json");
+@@ -105,7 +108,7 @@ const parseTsVersions = (aliases) => {
+     });
+ };
+ let cachedConfig;
+-export const getConfig = () => parseConfig();
++export const getConfig = (options) => parseConfig(options);
+ // workaround for a bug in Node 25 that creates localStorage as an empty proxy,
+ // leading to @typescript/vfs eventually throwing when it sees that it is not
+ // undefined and tries to call `getItem`:
+diff --git a/out/fixtures.js b/out/fixtures.js
+index 60114ad6182d078d2e079d6c99ce2427749aa8ba..ee5043ce264ab0fe226905da11b5bb90a4c71826 100644
+--- a/out/fixtures.js
++++ b/out/fixtures.js
+@@ -6,9 +6,7 @@ import { analyzeProjectAssertions } from "./cache/writeAssertionCache.js";
+ import { ensureCacheDirs, getConfig } from "./config.js";
+ import { forTypeScriptVersions } from "./tsVersioning.js";
+ export const setup = (options) => {
+-    const { ...config } = getConfig();
+-    if (options)
+-        Object.assign(config, options);
++    const { ...config } = getConfig(options);
+     process.env.ATTEST_CONFIG = JSON.stringify(config);
+     rmSync(config.cacheDir, { recursive: true, force: true });
+     ensureCacheDirs();

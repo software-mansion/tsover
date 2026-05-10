@@ -1,0 +1,82 @@
+{
+    "index.test.ts": [
+        {
+            "location": {
+                "start": {
+                    "line": 114,
+                    "char": 3
+                },
+                "end": {
+                    "line": 114,
+                    "char": 15
+                }
+            },
+            "args": [
+                {
+                    "type": "() => Vec3f",
+                    "relationships": {
+                        "args": [
+                            "equality"
+                        ],
+                        "typeArgs": []
+                    }
+                }
+            ],
+            "typeArgs": [],
+            "errors": [],
+            "completions": {}
+        },
+        {
+            "location": {
+                "start": {
+                    "line": 125,
+                    "char": 3
+                },
+                "end": {
+                    "line": 125,
+                    "char": 17
+                }
+            },
+            "args": [
+                {
+                    "type": "(a: Vec2f | Vec3f) => Vec2f | Vec3f",
+                    "relationships": {
+                        "args": [
+                            "equality"
+                        ],
+                        "typeArgs": []
+                    }
+                }
+            ],
+            "typeArgs": [],
+            "errors": [],
+            "completions": {}
+        },
+        {
+            "location": {
+                "start": {
+                    "line": 116,
+                    "char": 3
+                },
+                "end": {
+                    "line": 116,
+                    "char": 49
+                }
+            },
+            "count": 210
+        },
+        {
+            "location": {
+                "start": {
+                    "line": 127,
+                    "char": 3
+                },
+                "end": {
+                    "line": 127,
+                    "char": 49
+                }
+            },
+            "count": 200
+        }
+    ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "type-benchmark",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test": "pnpm --filter tsover build && vitest run",
+    "test:watch": "ATTEST_skipTypes=1 vitest run"
+  },
+  "dependencies": {
+    "@ark/attest": "^0.56.0",
+    "tsover-runtime": "workspace:^",
+    "typescript": "workspace:tsover@*",
+    "typescript-vanilla": "npm:typescript@6.0.3",
+    "vitest": "^4.0.18"
+  }
+}
