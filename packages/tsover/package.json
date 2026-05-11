@@ -1,7 +1,6 @@
 {
   "name": "tsover",
-  "version": "5.9.0",
-  "private": true,
+  "version": "5.9.12",
   "description": "Fork of TypeScript with operator overloading",
   "keywords": [
     "esbuild-plugin",
