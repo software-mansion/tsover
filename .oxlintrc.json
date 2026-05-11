@@ -16,6 +16,7 @@
     "**/dist/**",
     "**/build/**",
     "**/.git/**",
-    "packages/tsover/typescript/**"
+    "packages/tsover/typescript/**",
+    "packages/tsover-runtime/src/disable.d.ts"
   ]
 }

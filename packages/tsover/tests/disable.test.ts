@@ -46,7 +46,9 @@ function compileFixture(fixtureDir: string): Compiled {
   }
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, fixtureDir);
   if (parsed.errors.length > 0) {
-    throw new Error(parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'));
+    throw new Error(
+      parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'),
+    );
   }
 
   const program = ts.createProgram(parsed.fileNames, parsed.options);
@@ -61,7 +63,11 @@ function compileFixture(fixtureDir: string): Compiled {
 
   let binaryExpr: ts.BinaryExpression | undefined;
   function visit(node: ts.Node): void {
-    if (!binaryExpr && ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    if (
+      !binaryExpr &&
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.PlusToken
+    ) {
       binaryExpr = node;
       return;
     }
@@ -130,7 +136,9 @@ describe('without tsover-runtime/disable', () => {
   });
 
   it('emits neither 95198 nor 95199', () => {
-    expect(diagnosticsForNode(compiled, [WARNING_OUT_OF_SCOPE, WARNING_EXPLICITLY_DISABLED])).toHaveLength(0);
+    expect(
+      diagnosticsForNode(compiled, [WARNING_OUT_OF_SCOPE, WARNING_EXPLICITLY_DISABLED]),
+    ).toHaveLength(0);
   });
 
   it('types Vec2f + Vec2f as Vec2f via the overload', () => {

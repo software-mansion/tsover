@@ -13,4 +13,4 @@ declare global {
   var __tsover__disabled: true;
 }
 
-export { };
+export {};

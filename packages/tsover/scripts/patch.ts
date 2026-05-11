@@ -541,10 +541,11 @@ try {
         category: 'Warning',
         code: baseCode,
       },
-      "Operator overloading for '{0}' is disabled because \"tsover-runtime/disable\" has been imported in the program.": {
-        category: 'Warning',
-        code: baseCode + 1,
-      },
+      'Operator overloading for \'{0}\' is disabled because "tsover-runtime/disable" has been imported in the program.':
+        {
+          category: 'Warning',
+          code: baseCode + 1,
+        },
     });
     await writeFile(diagnosticsJsonPath, jsonc.stringify(diagnosticsJsonContent, undefined, 4));
     console.log('  ✓ Patched diagnosticMessages.json');
