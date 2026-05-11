@@ -87,7 +87,8 @@ async function main() {
       'publish',
       '--provenance',
       '--no-git-checks',
-      ...(tag === 'latest' ? [] : ['--tag', tag]),
+      '--tag',
+      tag,
       ...(isDryRun ? ['--dry-run'] : []),
     ];
 
