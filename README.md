@@ -1,5 +1,8 @@
 # tsover
 
+[![Ad](https://swm-delivery.com/www/images/zone-gh-tsover-1?n=1)](https://swm-delivery.com/www/delivery/ck-slug.php?zoneid=zone-gh-tsover-1\&n=1)
+[![Ad](https://swm-delivery.com/www/images/zone-gh-tsover-2?n=1)](https://swm-delivery.com/www/delivery/ck-slug.php?zoneid=zone-gh-tsover-2\&n=1)
+[![Ad](https://swm-delivery.com/www/images/zone-gh-tsover-3?n=1)](https://swm-delivery.com/www/delivery/ck-slug.php?zoneid=zone-gh-tsover-3\&n=1)
 A fork of TypeScript that adds only one functionality to the type checker... operator **over**loading.
 
 ## Documentation
