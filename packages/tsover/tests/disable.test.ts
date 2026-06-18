@@ -171,3 +171,44 @@ describe('without a use tsover directive', () => {
     expect(diagnosticsForNode(compiled, [WARNING_EXPLICITLY_DISABLED])).toHaveLength(0);
   });
 });
+
+describe('without a use tsover directive, but narrowed to a primitive intersection', () => {
+  let compiled: Compiled;
+  beforeAll(() => {
+    compiled = compileFixture(path.join(FIXTURES, 'no-directive-primitive-intersection'));
+  });
+
+  it('narrows the operand to T & number', () => {
+    const { checker, binaryExpr } = compiled;
+    expect(checker.typeToString(checker.getTypeAtLocation(binaryExpr.left))).toBe('T & number');
+  });
+
+  it('emits neither 95198 nor 95199 on the primitive-narrowed expression', () => {
+    expect(
+      diagnosticsForNode(compiled, [WARNING_OUT_OF_SCOPE, WARNING_EXPLICITLY_DISABLED]),
+    ).toHaveLength(0);
+  });
+});
+
+describe('without a use tsover directive, with a primitive intersection on only one operand', () => {
+  let compiled: Compiled;
+  beforeAll(() => {
+    compiled = compileFixture(path.join(FIXTURES, 'no-directive-primitive-intersection-mixed'));
+  });
+
+  it('narrows only the left operand to T & number', () => {
+    const { checker, binaryExpr } = compiled;
+    expect(checker.typeToString(checker.getTypeAtLocation(binaryExpr.left))).toBe('T & number');
+    expect(checker.typeToString(checker.getTypeAtLocation(binaryExpr.right))).toBe('T');
+  });
+
+  it('still emits Warning 95198 on the mixed expression', () => {
+    const hits = diagnosticsForNode(compiled, [WARNING_OUT_OF_SCOPE]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.category).toBe(ts.DiagnosticCategory.Warning);
+  });
+
+  it('does not emit Warning 95199', () => {
+    expect(diagnosticsForNode(compiled, [WARNING_EXPLICITLY_DISABLED])).toHaveLength(0);
+  });
+});

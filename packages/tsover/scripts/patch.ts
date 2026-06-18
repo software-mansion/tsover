@@ -297,21 +297,98 @@ try {
         return false;
     }
 
-    function __tsover__hasOverloadProperty(_leftType: Type, _rightType: Type, knownSymbolName: string): boolean {
-        const leftType = getBaseConstraintOrType(_leftType);
-        const rightType = getBaseConstraintOrType(_rightType);
+    function __tsover__getOverloadOperandType(reference: Expression, type: Type): Type {
+        // For naked type parameters, overload lookup should follow the current
+        // control-flow branch instead of immediately widening back to the full constraint.
+        if (type.flags & TypeFlags.TypeVariable) {
+            const constraint = getBaseConstraintOfType(type as TypeVariable);
+            if (constraint) {
+                const target = getReferenceCandidate(skipParentheses(reference, /*excludeJSDocTypeAssertions*/ true));
+                return getFlowTypeOfReference(target, constraint, constraint);
+            }
+        }
+        return type;
+    }
 
-        const typesToCheck: Type[] = [];
-        if (leftType.flags & TypeFlags.Union) {
-            typesToCheck.push(...(leftType as UnionType).types);
-        } else {
-            typesToCheck.push(leftType);
+    function __tsover__getPrimitiveStrippedIntersectionTypes(type: Type): Type[] | undefined {
+        if (!(type.flags & TypeFlags.Intersection)) {
+            return undefined;
         }
-        if (rightType.flags & TypeFlags.Union) {
-            typesToCheck.push(...(rightType as UnionType).types);
-        } else {
-            typesToCheck.push(rightType);
+
+        // When a narrowed type looks like T & number, keep the branded/object side
+        // for overload lookup so we do not reintroduce the primitive branch too early.
+        const types = (type as IntersectionType).types;
+        const stripped: Type[] = [];
+        for (const candidate of types) {
+            if (!__tsover__isPrimitiveLike(getBaseConstraintOrType(candidate))) {
+                stripped.push(candidate);
+            }
         }
+        return stripped.length > 0 && stripped.length < types.length ? stripped : undefined;
+    }
+
+    function __tsover__collectOverloadCandidateTypes(type: Type, expandTypeVariables = true): Type[] {
+        if (type.flags & TypeFlags.Union) {
+            // Unions are checked member-by-member so overload detection can mirror
+            // the same pair expansion used during result-type resolution.
+            const result: Type[] = [];
+            for (const member of (type as UnionType).types) {
+                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables));
+            }
+            return result;
+        }
+
+        const strippedIntersectionTypes = __tsover__getPrimitiveStrippedIntersectionTypes(type);
+        if (strippedIntersectionTypes) {
+            const result: Type[] = [];
+            for (const member of strippedIntersectionTypes) {
+                result.push(
+                    ...__tsover__collectOverloadCandidateTypes(member, /*expandTypeVariables*/ false),
+                );
+            }
+            return result;
+        }
+
+        if (type.flags & TypeFlags.Intersection) {
+            const result: Type[] = [];
+            for (const member of (type as IntersectionType).types) {
+                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables));
+            }
+            return result;
+        }
+
+        if (expandTypeVariables && type.flags & TypeFlags.TypeVariable) {
+            // Outside of flow-narrowed branches we still want plain type parameters
+            // to contribute their constraint members as overload candidates.
+            const constraint = getBaseConstraintOfType(type as TypeVariable);
+            if (constraint && constraint !== type) {
+                return __tsover__collectOverloadCandidateTypes(constraint, expandTypeVariables);
+            }
+        }
+
+        const baseType = expandTypeVariables ? getBaseConstraintOrType(type) : type;
+        if (baseType !== type) {
+            return __tsover__collectOverloadCandidateTypes(baseType, expandTypeVariables);
+        }
+
+        return [type];
+    }
+
+    function __tsover__hasOverloadProperty(
+      left: Expression,
+      right: Expression,
+      _leftType: Type,
+      _rightType: Type,
+      knownSymbolName: string,
+    ): boolean {
+        // The transform plugin uses this as a quick "is there any overload here?"
+        // check, so it should share the same operand normalization as the checker.
+        const leftType = __tsover__getOverloadOperandType(left, _leftType);
+        const rightType = __tsover__getOverloadOperandType(right, _rightType);
+        const typesToCheck = [
+            ...__tsover__collectOverloadCandidateTypes(leftType),
+            ...__tsover__collectOverloadCandidateTypes(rightType),
+        ];
 
         const propertyName = getPropertyNameForKnownSymbolName(knownSymbolName);
         return typesToCheck.some((aType) => !!getTypeOfPropertyOfType(aType, propertyName));
@@ -319,6 +396,66 @@ try {
 
     function __tsover__isInOverloadingScope(node: Node): boolean {
         return __tsover__isInUseTsoverScope(node) || __tsover__isInUseGpuScope(node);
+    }
+
+    function __tsover__isPrimitiveLike(type: Type): boolean {
+        return isTypeAssignableToKind(type, TypeFlags.StringLike, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.NumberLike, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.BigIntLike, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.BooleanLike, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.ESSymbolLike, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.Null, /*strict*/ true) ||
+            isTypeAssignableToKind(type, TypeFlags.Undefined, /*strict*/ true);
+    }
+
+    function __tsover__isPrimitiveIntersection(type: Type): boolean {
+        return !!(type.flags & TypeFlags.Intersection) && some((type as IntersectionType).types, t => {
+            const baseType = getBaseConstraintOrType(t);
+            return !!(baseType.flags & TypeFlags.Primitive);
+        });
+    }
+
+    function __tsover__builtinSupportsPrimitiveOperator(
+      operator: BinaryOperator,
+      leftType: Type,
+      rightType: Type,
+    ): boolean {
+        // This mirrors the small subset of builtin binary behavior that we need
+        // when one union member should stay on the normal primitive operator path.
+        switch (__tsover__compoundOperators[operator] ?? operator) {
+            case SyntaxKind.PlusToken:
+                return !!(isTypeAssignableToKind(leftType, TypeFlags.NumberLike, /*strict*/ true) &&
+                    isTypeAssignableToKind(rightType, TypeFlags.NumberLike, /*strict*/ true) ||
+                    isTypeAssignableToKind(leftType, TypeFlags.BigIntLike, /*strict*/ true) &&
+                    isTypeAssignableToKind(rightType, TypeFlags.BigIntLike, /*strict*/ true) ||
+                    isTypeAssignableToKind(leftType, TypeFlags.StringLike, /*strict*/ true) ||
+                    isTypeAssignableToKind(rightType, TypeFlags.StringLike, /*strict*/ true) ||
+                    isTypeAny(leftType) ||
+                    isTypeAny(rightType));
+            case SyntaxKind.MinusToken:
+            case SyntaxKind.AsteriskToken:
+            case SyntaxKind.SlashToken:
+            case SyntaxKind.AsteriskAsteriskToken:
+            case SyntaxKind.PercentToken:
+                return !!(isTypeAssignableToKind(leftType, TypeFlags.NumberLike, /*strict*/ true) &&
+                    isTypeAssignableToKind(rightType, TypeFlags.NumberLike, /*strict*/ true) ||
+                    isTypeAssignableToKind(leftType, TypeFlags.BigIntLike, /*strict*/ true) &&
+                    isTypeAssignableToKind(rightType, TypeFlags.BigIntLike, /*strict*/ true) ||
+                    isTypeAny(leftType) ||
+                    isTypeAny(rightType));
+        }
+
+        return false;
+    }
+
+    function __tsover__shouldSuppressDisabledWarning(
+      operator: BinaryOperator,
+      leftType: Type,
+      rightType: Type,
+    ): boolean {
+        return (__tsover__isPrimitiveLike(leftType) || __tsover__isPrimitiveIntersection(leftType)) &&
+            (__tsover__isPrimitiveLike(rightType) || __tsover__isPrimitiveIntersection(rightType)) &&
+            __tsover__builtinSupportsPrimitiveOperator(operator, leftType, rightType);
     }
 
     function __tsover__couldHaveOverloadedOperators(
@@ -339,9 +476,24 @@ try {
         if (!__tsover__isInOverloadingScope(left)) {
             return false;
         }
-        return __tsover__hasOverloadProperty(_leftType, _rightType, knownSymbolName);
+        return __tsover__hasOverloadProperty(left, right, _leftType, _rightType, knownSymbolName);
     }
 
+    /**
+     * Resolve the type of an overloaded binary operator.
+     *
+     * The search order is:
+     * 1. Narrow generic operands using the current control-flow branch.
+     * 2. Expand unions into the operand pairs that could actually occur.
+     * 3. Try the left operand's overload signatures.
+     * 4. If the left side has no match, or it returns deferOperation, try the right side.
+     * 5. If a union branch still has no overload, ask normal TypeScript whether that
+     *    specific branch should use the builtin primitive operator instead.
+     *
+     * We keep the overloaded result only when every tested pair succeeds. That
+     * makes broad expressions like left + right stay conservative when one side
+     * is still wider than the branch-local narrowing on the other side.
+     */
     function __tsover__getOverloadReturnType(
       left: Expression,
       operator: BinaryOperator,
@@ -358,8 +510,8 @@ try {
 
         let combinations: [Type, Type][] = [];
         {
-            const leftType = getBaseConstraintOrType(_leftType);
-            const rightType = getBaseConstraintOrType(_rightType);
+            const leftType = __tsover__getOverloadOperandType(left, _leftType);
+            const rightType = __tsover__getOverloadOperandType(right, _rightType);
 
             // _leftType is a constrained type (a generic), and _rightType is of the same type.
             // If they're unions, we only need to consider the combinations where lhs and rhs match.
@@ -466,7 +618,11 @@ try {
           // pointing at the disabling condition so the user can opt in.
           const __tsover__baseOp = __tsover__compoundOperators[operator] ?? operator;
           const __tsover__knownSymbolName = __tsover__overloaded[__tsover__baseOp as keyof typeof __tsover__overloaded];
-          if (__tsover__knownSymbolName && __tsover__hasOverloadProperty(leftType, rightType, __tsover__knownSymbolName)) {
+          if (
+              __tsover__knownSymbolName &&
+              !__tsover__shouldSuppressDisabledWarning(operator, leftType, rightType) &&
+              __tsover__hasOverloadProperty(left, right, leftType, rightType, __tsover__knownSymbolName)
+          ) {
               if (__tsover__isExplicitlyDisabled()) {
                   errorOrSuggestion(/*isError*/ true, operatorToken, Diagnostics.Operator_overloading_for_0_is_disabled_because_tsover_runtime_Slashdisable_has_been_imported_in_the_program, tokenToString(operator));
               }
