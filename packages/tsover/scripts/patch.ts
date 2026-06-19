@@ -222,6 +222,37 @@ try {
         [SyntaxKind.PercentEqualsToken]: SyntaxKind.PercentToken,
     } as Record<SyntaxKind, BinaryOperator | undefined>;
 
+    let __tsover__debugCurrentSourceFile: SourceFile | undefined;
+    let __tsover__debugLastNode: Node | undefined;
+    let __tsover__debugLastSourceElement: Node | undefined;
+    let __tsover__debugLastExpression: Node | undefined;
+
+    function __tsover__debugFormatNode(node: Node | undefined): string {
+        if (!node) {
+            return "<unknown>";
+        }
+        try {
+            const sourceFile = getSourceFileOfNode(node);
+            const pos = Math.max(0, Math.min(skipTrivia(sourceFile.text, node.pos), sourceFile.text.length));
+            const end = Math.max(pos, Math.min(node.end, sourceFile.text.length));
+            const lineAndCharacter = getLineAndCharacterOfPosition(sourceFile, pos);
+            const text = sourceFile.text.slice(pos, Math.min(end, pos + 240)).replace(/\\s+/g, " ").trim();
+            return sourceFile.fileName + ":" + (lineAndCharacter.line + 1) + ":" + (lineAndCharacter.character + 1) +
+                " " + Debug.formatSyntaxKind(node.kind) + (text ? " " + JSON.stringify(text) : "");
+        }
+        catch {
+            return "<failed to format node>";
+        }
+    }
+
+    function __tsover__debugLogFailure(error: unknown): void {
+        console.error("[tsover-debug] checker failed while checking " + (__tsover__debugCurrentSourceFile?.fileName ?? "<unknown file>"));
+        console.error("[tsover-debug] error: " + (error instanceof Error ? error.stack || error.message : String(error)));
+        console.error("[tsover-debug] last source element: " + __tsover__debugFormatNode(__tsover__debugLastSourceElement));
+        console.error("[tsover-debug] last expression: " + __tsover__debugFormatNode(__tsover__debugLastExpression));
+        console.error("[tsover-debug] last node: " + __tsover__debugFormatNode(__tsover__debugLastNode));
+    }
+
     function __tsover__findBinarySignature(signatures: readonly Signature[], lhs: Type, rhs: Type): Type | undefined {
         // Find a signature where the first parameter accepts lhs and second accepts rhs
         for (const signature of signatures) {
@@ -602,7 +633,48 @@ try {
             links.tsoverOverloadReturnTypesResolving?.delete(cacheKey);
         }
     }
-  `,
+      `,
+    );
+
+    checkerContent = checkerContent.replace(
+      /function checkSourceElement\(node: Node \| undefined\): void \{\s*if \(node\) \{\s*const saveCurrentNode = currentNode;\s*currentNode = node;\s*instantiationCount = 0;/,
+      `function checkSourceElement(node: Node | undefined): void {
+        if (node) {
+            const saveCurrentNode = currentNode;
+            currentNode = node;
+            __tsover__debugLastNode = node;
+            __tsover__debugLastSourceElement = node;
+            instantiationCount = 0;`,
+    );
+
+    checkerContent = checkerContent.replace(
+      /function checkExpression\(node: Expression \| QualifiedName, checkMode\?: CheckMode, forceTuple\?: boolean\): Type \{\s*tracing\?\.push\([\s\S]*?\);\s*const saveCurrentNode = currentNode;\s*currentNode = node;\s*instantiationCount = 0;/,
+      `function checkExpression(node: Expression | QualifiedName, checkMode?: CheckMode, forceTuple?: boolean): Type {
+        tracing?.push(tracing.Phase.Check, "checkExpression", { kind: node.kind, pos: node.pos, end: node.end, path: (node as TracingNode).tracingPath });
+        const saveCurrentNode = currentNode;
+        currentNode = node;
+        __tsover__debugLastNode = node;
+        __tsover__debugLastExpression = node;
+        instantiationCount = 0;`,
+    );
+
+    checkerContent = checkerContent.replace(
+      /performance\.mark\(beforeMark\);\s*nodesToCheck \? checkSourceFileNodesWorker\(node, nodesToCheck\) : checkSourceFileWorker\(node\);\s*performance\.mark\(afterMark\);/,
+      `performance.mark(beforeMark);
+        const __tsover__debugSavedSourceFile = __tsover__debugCurrentSourceFile;
+        __tsover__debugCurrentSourceFile = node;
+        console.log("[tsover-debug] checking " + node.fileName);
+        try {
+            nodesToCheck ? checkSourceFileNodesWorker(node, nodesToCheck) : checkSourceFileWorker(node);
+        }
+        catch (error) {
+            __tsover__debugLogFailure(error);
+            throw error;
+        }
+        finally {
+            __tsover__debugCurrentSourceFile = __tsover__debugSavedSourceFile;
+        }
+        performance.mark(afterMark);`,
     );
 
     // Making some functions public for use outside of the type checker (by the plugin)
