@@ -228,7 +228,7 @@ try {
             const paramType1 = getTypeAtPosition(signature, 0);
             const paramType2 = getTypeAtPosition(signature, 1);
             if (isTypeAssignableTo(lhs, paramType1) && isTypeAssignableTo(rhs, paramType2)) {
-                return getReturnTypeOfSignature(signature);
+                return isResolvingReturnTypeOfSignature(signature) ? anyType : getReturnTypeOfSignature(signature);
             }
         }
         return undefined;
