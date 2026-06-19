@@ -164,3 +164,71 @@ test('T extends Vec2f | Vec3f, vec * vec', () => {
 
   expect(square(new Vec2f(0.5, 2))).toStrictEqual(new Vec2f(0.25, 4));
 });
+
+test('T extends Vec2f | number, narrowed to Vec2f, vec + vec', () => {
+  function addToSelf<T extends Vec2f | number>(value: T): Vec2f | number {
+    'use tsover';
+    if (typeof value !== 'number') {
+      const result = value + value;
+
+      expectTypeOf(result).toEqualTypeOf<Vec2f>();
+
+      return result;
+    }
+
+    return value;
+  }
+
+  expect(addToSelf(new Vec2f(1, 2))).toStrictEqual(new Vec2f(2, 4));
+  expect(addToSelf(3)).toStrictEqual(3);
+});
+
+test('T extends Vec2f | number, narrowed to number, value + value', () => {
+  function addToSelf<T extends Vec2f | number>(value: T): Vec2f | number {
+    'use tsover';
+    if (typeof value === 'number') {
+      const result = value + value;
+
+      expectTypeOf(result).toEqualTypeOf<number>();
+
+      return result;
+    }
+
+    return value;
+  }
+
+  expect(addToSelf(3)).toStrictEqual(6);
+  expect(addToSelf(new Vec2f(1, 2))).toStrictEqual(new Vec2f(1, 2));
+});
+
+test('T extends Vec2f | number, narrowed to number, value + 1', () => {
+  function increment<T extends Vec2f | number>(value: T): Vec2f | number {
+    'use tsover';
+    if (typeof value === 'number') {
+      const result = value + 1;
+
+      expectTypeOf(result).toEqualTypeOf<number>();
+
+      return result;
+    }
+
+    return value;
+  }
+
+  expect(increment(3)).toStrictEqual(4);
+  expect(increment(new Vec2f(1, 2))).toStrictEqual(new Vec2f(1, 2));
+});
+
+function addLeftToRight<T extends Vec2f | number>(left: T, right: T): T {
+  'use tsover';
+  if (typeof left !== 'number') {
+    // @ts-expect-error right is still broad here, so the overload is not guaranteed
+    return left + right;
+  }
+
+  return left;
+}
+
+test('T extends Vec2f | number, narrowed left but broad right, left + right still errors', () => {
+  expect(addLeftToRight(1, 2)).toStrictEqual(1);
+});
