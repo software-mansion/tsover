@@ -155,6 +155,8 @@ try {
       `
       useTsoverScope?: boolean;    // True if node is within a 'use tsover' directive scope,
       useGpuScope?: boolean;       // True if node is within a 'use gpu' directive scope
+      tsoverOverloadReturnTypes?: Map<string, Type | false>; // Cached overloaded operator result types
+      tsoverOverloadReturnTypesResolving?: Set<string>; // In-progress overloaded operator result lookups
       `,
     );
 
@@ -220,13 +222,44 @@ try {
         [SyntaxKind.PercentEqualsToken]: SyntaxKind.PercentToken,
     } as Record<SyntaxKind, BinaryOperator | undefined>;
 
+    let __tsover__debugCurrentSourceFile: SourceFile | undefined;
+    let __tsover__debugLastNode: Node | undefined;
+    let __tsover__debugLastSourceElement: Node | undefined;
+    let __tsover__debugLastExpression: Node | undefined;
+
+    function __tsover__debugFormatNode(node: Node | undefined): string {
+        if (!node) {
+            return "<unknown>";
+        }
+        try {
+            const sourceFile = getSourceFileOfNode(node);
+            const pos = Math.max(0, Math.min(skipTrivia(sourceFile.text, node.pos), sourceFile.text.length));
+            const end = Math.max(pos, Math.min(node.end, sourceFile.text.length));
+            const lineAndCharacter = getLineAndCharacterOfPosition(sourceFile, pos);
+            const text = sourceFile.text.slice(pos, Math.min(end, pos + 240)).replace(/\\s+/g, " ").trim();
+            return sourceFile.fileName + ":" + (lineAndCharacter.line + 1) + ":" + (lineAndCharacter.character + 1) +
+                " " + Debug.formatSyntaxKind(node.kind) + (text ? " " + JSON.stringify(text) : "");
+        }
+        catch {
+            return "<failed to format node>";
+        }
+    }
+
+    function __tsover__debugLogFailure(error: unknown): void {
+        console.error("[tsover-debug] checker failed while checking " + (__tsover__debugCurrentSourceFile?.fileName ?? "<unknown file>"));
+        console.error("[tsover-debug] error: " + (error instanceof Error ? error.stack || error.message : String(error)));
+        console.error("[tsover-debug] last source element: " + __tsover__debugFormatNode(__tsover__debugLastSourceElement));
+        console.error("[tsover-debug] last expression: " + __tsover__debugFormatNode(__tsover__debugLastExpression));
+        console.error("[tsover-debug] last node: " + __tsover__debugFormatNode(__tsover__debugLastNode));
+    }
+
     function __tsover__findBinarySignature(signatures: readonly Signature[], lhs: Type, rhs: Type): Type | undefined {
         // Find a signature where the first parameter accepts lhs and second accepts rhs
         for (const signature of signatures) {
             const paramType1 = getTypeAtPosition(signature, 0);
             const paramType2 = getTypeAtPosition(signature, 1);
             if (isTypeAssignableTo(lhs, paramType1) && isTypeAssignableTo(rhs, paramType2)) {
-                return getReturnTypeOfSignature(signature);
+                return isResolvingReturnTypeOfSignature(signature) ? anyType : getReturnTypeOfSignature(signature);
             }
         }
         return undefined;
@@ -327,13 +360,20 @@ try {
         return stripped.length > 0 && stripped.length < types.length ? stripped : undefined;
     }
 
-    function __tsover__collectOverloadCandidateTypes(type: Type, expandTypeVariables = true): Type[] {
+    function __tsover__collectOverloadCandidateTypes(type: Type, expandTypeVariables = true, seen?: Set<string>): Type[] {
+        seen ??= new Set();
+        const seenKey = \`\${expandTypeVariables ? 1 : 0}:\${getTypeId(type)}\`;
+        if (seen.has(seenKey)) {
+            return [];
+        }
+        seen.add(seenKey);
+
         if (type.flags & TypeFlags.Union) {
             // Unions are checked member-by-member so overload detection can mirror
             // the same pair expansion used during result-type resolution.
             const result: Type[] = [];
             for (const member of (type as UnionType).types) {
-                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables));
+                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables, seen));
             }
             return result;
         }
@@ -343,7 +383,7 @@ try {
             const result: Type[] = [];
             for (const member of strippedIntersectionTypes) {
                 result.push(
-                    ...__tsover__collectOverloadCandidateTypes(member, /*expandTypeVariables*/ false),
+                    ...__tsover__collectOverloadCandidateTypes(member, /*expandTypeVariables*/ false, seen),
                 );
             }
             return result;
@@ -352,7 +392,7 @@ try {
         if (type.flags & TypeFlags.Intersection) {
             const result: Type[] = [];
             for (const member of (type as IntersectionType).types) {
-                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables));
+                result.push(...__tsover__collectOverloadCandidateTypes(member, expandTypeVariables, seen));
             }
             return result;
         }
@@ -362,13 +402,13 @@ try {
             // to contribute their constraint members as overload candidates.
             const constraint = getBaseConstraintOfType(type as TypeVariable);
             if (constraint && constraint !== type) {
-                return __tsover__collectOverloadCandidateTypes(constraint, expandTypeVariables);
+                return __tsover__collectOverloadCandidateTypes(constraint, expandTypeVariables, seen);
             }
         }
 
         const baseType = expandTypeVariables ? getBaseConstraintOrType(type) : type;
         if (baseType !== type) {
-            return __tsover__collectOverloadCandidateTypes(baseType, expandTypeVariables);
+            return __tsover__collectOverloadCandidateTypes(baseType, expandTypeVariables, seen);
         }
 
         return [type];
@@ -495,6 +535,7 @@ try {
      * is still wider than the branch-local narrowing on the other side.
      */
     function __tsover__getOverloadReturnType(
+      node: BinaryExpression,
       left: Expression,
       operator: BinaryOperator,
       right: Expression,
@@ -508,10 +549,21 @@ try {
             return undefined;
         }
 
-        let combinations: [Type, Type][] = [];
-        {
-            const leftType = __tsover__getOverloadOperandType(left, _leftType);
-            const rightType = __tsover__getOverloadOperandType(right, _rightType);
+        const leftType = __tsover__getOverloadOperandType(left, _leftType);
+        const rightType = __tsover__getOverloadOperandType(right, _rightType);
+        const cacheKey = \`\${operator}:\${getTypeId(leftType)}:\${getTypeId(rightType)}\`;
+        const links = getNodeLinks(node);
+        const cached = links.tsoverOverloadReturnTypes?.get(cacheKey);
+        if (cached !== undefined) {
+            return cached || undefined;
+        }
+        if (links.tsoverOverloadReturnTypesResolving?.has(cacheKey)) {
+            return undefined;
+        }
+        (links.tsoverOverloadReturnTypesResolving ||= new Set()).add(cacheKey);
+
+        try {
+            let combinations: [Type, Type][] = [];
 
             // _leftType is a constrained type (a generic), and _rightType is of the same type.
             // If they're unions, we only need to consider the combinations where lhs and rhs match.
@@ -538,50 +590,91 @@ try {
             } else {
               combinations.push([leftType, rightType]);
             }
+
+            const deferOperationType = __tsover__getDeferOperationSymbolType();
+            const propertyName = getPropertyNameForKnownSymbolName(knownSymbolName);
+            let resultMembers: Type[] = [];
+            for (const [leftType, rightType] of combinations) {
+                const lhsOverload = getTypeOfPropertyOfType(leftType, propertyName);
+                const rhsOverload = getTypeOfPropertyOfType(rightType, propertyName);
+                const lhsSignatures = lhsOverload ? getSignaturesOfType(lhsOverload, SignatureKind.Call) : [];
+                let resultType = __tsover__findBinarySignature(lhsSignatures, leftType, rightType);
+
+                if (lhsSignatures.length === 0 || (resultType && deferOperationType && isTypeIdenticalTo(resultType, deferOperationType))) {
+                    // Try rhs overloads if lhs has no overloads or if result has deferOperation symbol
+                    const rhsSignatures = rhsOverload ? getSignaturesOfType(rhsOverload, SignatureKind.Call) : [];
+                    resultType = __tsover__findBinarySignature(rhsSignatures, leftType, rightType);
+                }
+                if (resultType && deferOperationType && isTypeIdenticalTo(resultType, deferOperationType)) {
+                    resultType = undefined;
+                }
+
+                // Might be a valid primitive that can be part of this operation. If the number
+                // of combinations is 1, then we can just fallback to standard behavior, but if not,
+                // we need to check deeper and append the result to the union.
+                if (resultType === undefined && combinations.length > 1) {
+                    resultType = checkDeeper(leftType, rightType);
+                }
+
+                // Both operands either have no overloads, or both have deferred.
+                if (resultType === undefined) {
+                    // All union members must be valid operations
+                    resultMembers = [];
+                    break;
+                }
+                resultMembers.push(resultType);
+            }
+
+            const result = resultMembers.length === 0 ? undefined : getUnionType(resultMembers);
+            (links.tsoverOverloadReturnTypes ||= new Map()).set(cacheKey, result || false);
+            return result;
         }
-
-        const deferOperationType = __tsover__getDeferOperationSymbolType();
-        const propertyName = getPropertyNameForKnownSymbolName(knownSymbolName);
-        let resultMembers: Type[] = [];
-        for (const [leftType, rightType] of combinations) {
-            const lhsOverload = getTypeOfPropertyOfType(leftType, propertyName);
-            const rhsOverload = getTypeOfPropertyOfType(rightType, propertyName);
-            const lhsSignatures = lhsOverload ? getSignaturesOfType(lhsOverload, SignatureKind.Call) : [];
-            let resultType = __tsover__findBinarySignature(lhsSignatures, leftType, rightType);
-
-            if (lhsSignatures.length === 0 || (resultType && deferOperationType && isTypeIdenticalTo(resultType, deferOperationType))) {
-                // Try rhs overloads if lhs has no overloads or if result has deferOperation symbol
-                const rhsSignatures = rhsOverload ? getSignaturesOfType(rhsOverload, SignatureKind.Call) : [];
-                resultType = __tsover__findBinarySignature(rhsSignatures, leftType, rightType);
-            }
-            if (resultType && deferOperationType && isTypeIdenticalTo(resultType, deferOperationType)) {
-                resultType = undefined;
-            }
-
-            // Might be a valid primitive that can be part of this operation. If the number
-            // of combinations is 1, then we can just fallback to standard behavior, but if not,
-            // we need to check deeper and append the result to the union.
-            if (resultType === undefined && combinations.length > 1) {
-                resultType = checkDeeper(leftType, rightType);
-            }
-
-            // Both operands either have no overloads, or both have deferred.
-            if (resultType === undefined) {
-                // All union members must be valid operations
-                resultMembers = [];
-                break;
-            }
-            resultMembers.push(resultType);
+        finally {
+            links.tsoverOverloadReturnTypesResolving?.delete(cacheKey);
         }
-
-        if (resultMembers.length === 0) {
-            // Fallback to normal TS behavior
-            return undefined;
-        }
-
-        return getUnionType(resultMembers);
     }
-  `,
+      `,
+    );
+
+    checkerContent = checkerContent.replace(
+      /function checkSourceElement\(node: Node \| undefined\): void \{\s*if \(node\) \{\s*const saveCurrentNode = currentNode;\s*currentNode = node;\s*instantiationCount = 0;/,
+      `function checkSourceElement(node: Node | undefined): void {
+        if (node) {
+            const saveCurrentNode = currentNode;
+            currentNode = node;
+            __tsover__debugLastNode = node;
+            __tsover__debugLastSourceElement = node;
+            instantiationCount = 0;`,
+    );
+
+    checkerContent = checkerContent.replace(
+      /function checkExpression\(node: Expression \| QualifiedName, checkMode\?: CheckMode, forceTuple\?: boolean\): Type \{\s*tracing\?\.push\([\s\S]*?\);\s*const saveCurrentNode = currentNode;\s*currentNode = node;\s*instantiationCount = 0;/,
+      `function checkExpression(node: Expression | QualifiedName, checkMode?: CheckMode, forceTuple?: boolean): Type {
+        tracing?.push(tracing.Phase.Check, "checkExpression", { kind: node.kind, pos: node.pos, end: node.end, path: (node as TracingNode).tracingPath });
+        const saveCurrentNode = currentNode;
+        currentNode = node;
+        __tsover__debugLastNode = node;
+        __tsover__debugLastExpression = node;
+        instantiationCount = 0;`,
+    );
+
+    checkerContent = checkerContent.replace(
+      /performance\.mark\(beforeMark\);\s*nodesToCheck \? checkSourceFileNodesWorker\(node, nodesToCheck\) : checkSourceFileWorker\(node\);\s*performance\.mark\(afterMark\);/,
+      `performance.mark(beforeMark);
+        const __tsover__debugSavedSourceFile = __tsover__debugCurrentSourceFile;
+        __tsover__debugCurrentSourceFile = node;
+        console.log("[tsover-debug] checking " + node.fileName);
+        try {
+            nodesToCheck ? checkSourceFileNodesWorker(node, nodesToCheck) : checkSourceFileWorker(node);
+        }
+        catch (error) {
+            __tsover__debugLogFailure(error);
+            throw error;
+        }
+        finally {
+            __tsover__debugCurrentSourceFile = __tsover__debugSavedSourceFile;
+        }
+        performance.mark(afterMark);`,
     );
 
     // Making some functions public for use outside of the type checker (by the plugin)
@@ -600,6 +693,7 @@ try {
       /function checkBinaryLikeExpressionWorker\([\S\s]*const operator = operatorToken\.kind;/,
       `
       const overloadedType = __tsover__getOverloadReturnType(
+        operatorToken.parent as BinaryExpression,
         left,
         operator,
         right,
