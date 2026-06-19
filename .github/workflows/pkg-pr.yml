@@ -40,4 +40,4 @@ jobs:
         run: pnpm run -r build
 
       - name: Publish (pkg.pr.new)
-        run: pnpm exec pkg-pr-new publish './packages/tsover' --pnpm --no-compact
+        run: pnpm exec pkg-pr-new publish  --pnpm --no-compact --commentWithSha './packages/tsover'
