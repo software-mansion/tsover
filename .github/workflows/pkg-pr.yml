@@ -1,0 +1,43 @@
+name: Publish PR package (pkg.pr.new)
+
+on: [pull_request]
+
+jobs:
+  build-and-publish:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+    steps:
+      - name: Checkout your repository using git
+        uses: actions/checkout@v4
+
+      - name: Print commit id, message and tag
+        run: |
+          git show -s --format='%h %s'
+          echo "github.ref -> {{ github.ref }}"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install and build dependencies
+        run: |
+          pnpm install --frozen-lockfile --filter tsover
+          pnpm --filter tsover run patch
+          pnpm install --frozen-lockfile
+
+      - name: Build everything
+        run: pnpm run -r build
+
+      - name: Publish (pkg.pr.new)
+        run: pnpm exec pkg-pr-new publish './packages/tsover' --pnpm --no-compact --commentWithSha
